@@ -1,0 +1,106 @@
+version: "3"
+services:
+    postgres:
+        image: postgres:13
+        environment:
+            POSTGRES_USER: ${PG_USER}
+            POSTGRES_PASSWORD: ${PG_PASS}
+            POSTGRES_DB: ${PG_DB}
+        ports:
+            - 5432:5432
+        volumes:
+            - postgres-db-volume:/var/lib/postgresql/data
+        deploy:
+            resources:
+                limits:
+                    memory: 2G
+        healthcheck:
+            test:
+                - "CMD"
+                - "pg_isready"
+                - "-U"
+                - ${PG_USER}
+                - "-d"
+                - ${PG_DB}
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        restart: always
+    rabbitmq:
+        hostname: ${RABBITMQ_HOST}
+        image: rabbitmq:3.9.12
+        volumes:
+            - "./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf"
+        ports:
+            - "5672:5672"
+        restart: always
+    worker:
+        image: riski24/celery:v1
+        environment:
+            - REDIS_HOST=${REDIS_HOST}
+            - REDIS_PORT=${REDIS_PORT}
+            - REDIS_CELERY_DB_INDEX=${REDIS_CELERY_DB_INDEX}
+            - REDIS_STORE_DB_INDEX=${REDIS_STORE_DB_INDEX}
+            - RABBITMQ_HOST=${RABBITMQ_HOST}
+            - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=${RABBITMQ_PORT}
+        depends_on:
+            - rabbitmq
+            - redis
+        restart: always
+    redis:
+        hostname: ${REDIS_HOST}
+        image: redis:6.2.6
+        ports:
+            - "6380:6380"
+        restart: always
+    api:
+        image: riski24/procurement-api:v1
+        environment:
+            - REDIS_HOST=${REDIS_HOST}
+            - REDIS_PORT=${REDIS_PORT}
+            - REDIS_CELERY_DB_INDEX=${REDIS_CELERY_DB_INDEX}
+            - REDIS_STORE_DB_INDEX=${REDIS_STORE_DB_INDEX}
+            - RABBITMQ_HOST=${RABBITMQ_HOST}
+            - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=${RABBITMQ_PORT}
+        volumes:
+            - ./app:/usr/src/app/
+            - ./test:/usr/src/test/
+        depends_on:
+            - worker
+        ports:
+            - "5000:5000"
+        healthcheck:
+            test: [ "CMD", "curl", "--fail", "http://localhost:5000/docs" ]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+            start_period: 10s
+        restart: always
+    flower:
+        image: riski24/flower:v1
+        environment:
+            - REDIS_HOST=${REDIS_HOST}
+            - REDIS_PORT=${REDIS_PORT}
+            - REDIS_CELERY_DB_INDEX=${REDIS_CELERY_DB_INDEX}
+            - REDIS_STORE_DB_INDEX=${REDIS_STORE_DB_INDEX}
+            - RABBITMQ_HOST=${RABBITMQ_HOST}
+            - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=${RABBITMQ_PORT}
+        ports:
+            - 5566:5566
+        healthcheck:
+            test: [ "CMD", "curl", "--fail", "http://localhost:5566/" ]
+            interval: 10s
+            timeout: 10s
+            retries: 5
+        depends_on:
+            - rabbitmq
+            - redis
+        restart: always
+volumes:
+    postgres-db-volume:
