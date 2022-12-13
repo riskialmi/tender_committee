@@ -48,8 +48,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             'on_behalf_of': payload.get("on_behalf_of")
             }
 
-def fake_auth_user(db: Session = Depends(get_db)):
-    user = get_user_by_email(EMAIL_ADMIN[0], db)
-    return {'user': user.account_name,
-            'on_behalf_of': user.account_name
+def fake_auth_user():
+    return {'user': 'user_test',
+            'on_behalf_of': 'user_test'
             }
+

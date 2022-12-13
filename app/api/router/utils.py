@@ -7,3 +7,9 @@ def exception_handler_negative_case(status_code, msg, data):
                  'data': data,
                  "message": msg},
     )
+
+def response_success(data, msg=None):
+    return {'is_success': True,
+            'data': data,
+            "message": msg
+            }

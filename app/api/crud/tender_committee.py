@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, text
 from sqlalchemy.sql.expression import cast
 from app.db.models import tender_committee as models
-from app.api.crud import utils
+from app.api.crud import utils, user_management
 from app.system.constant import initial_status_tender_committee
 from fastapi import HTTPException, status
 
@@ -95,17 +95,22 @@ def get_tender_committee_request_by_request_no(request_no, db: Session):
 
     if not data_tcr:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"request number {request_no} doesn't exist")
+                            detail=f"Request number {request_no} doesn't exist")
 
     return data_tcr
 
 
 def get_tender_committee_recommendation_by_request_no(request_no, db: Session):
-    return db.query(models.TenderCommitteeRecommendation)\
+    data = db.query(models.TenderCommitteeRecommendation)\
         .join(models.TenderCommitteeRequest, tcr.id == tcrc.tender_committee_request_id)\
         .filter(tcr.request_no == request_no)\
         .all()
 
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Data not found with request number {request_no}")
+
+    return data
 
 def get_tender_committee_by_id(id, db: Session):
     tc_obj = db.query(tc.id,

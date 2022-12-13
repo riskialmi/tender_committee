@@ -125,10 +125,7 @@ def get_details_k2_employee_onboarding_by_account_name(account_name, db: Session
                               keob.bank_account_no,
                               keob.bank_account_name,
                               keob.registered_on
-                              # func.string_agg(func.cast(ur.role_id.label()), ',').label("list_role")
                               ) \
-                     # .join(models.UserRoles, ur.account_name == keob.account_name, isouter=True) \
-                     # .join(models.MasterRole, models.MasterRole.id == ur.id, isouter=True) \
                      .filter(keob.account_name == account_name) \
                      .group_by(keob.account_name) \
                      .first())
@@ -214,10 +211,6 @@ def create_user_account(param, db: Session):
                                       branch_name=param.branch_name, bank_account_no=param.bank_account_no,
                                       bank_account_name=param.bank_account_name)
 
-    # db.add(user_account)
-    # db.commit()
-    # db.refresh(user_account)
-
     create_user_roles(param.roles, user_account.account_name, db)
     create_hist_user_roles(param.roles, user_account, db)
     db.commit()
@@ -277,7 +270,6 @@ def get_user_audittrail(user):
     user_audittrail = user.user_audittrail
     user = user.__dict__
     user.pop('user_audittrail')
-    # user.pop('_sa_instance_state')
     json_user = json.dumps(user, default=str)
     json_load_user = json.loads(json_user)
 
