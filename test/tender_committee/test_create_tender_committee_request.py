@@ -1,22 +1,16 @@
-import datetime
-from pydantic import parse_obj_as
+from copy import copy
 
 from test.conftest import clear_all_fields_in_dict
-from test.tender_committee.tender_committee_attr_value import return_success, tender_committee_request as tcr
+from test.tender_committee.tender_committee_attr_value import tender_committee_request
+from app.api.crud.utils import random_alphanumeric
+from app.api.schemas import tender_committee as schemas
+from app.api.schemas.utils import ReturnSuccess
+from app.api.router.utils import response_success
 from app.api.crud.tender_committee import get_tender_committee_request_by_request_no, \
     get_tender_committee_recommendation_by_request_no
-from app.api.crud.utils import random_alphanumeric
-from app.api.schemas.tender_committee import FormRequest, TenderCommitteeRequest
-from app.api.schemas.utils import ReturnSuccess
-from app.db.database import SessionLocal
 
 prefix = '/TenderCommittee'
-now = datetime.datetime.now()
-db = SessionLocal()
 
-tender_committee_request = {}
-tender_committee_request.update(tcr)
-tender_committee_request['agns_number'] = 'S.9999/VIII/IIF/2021'
 
 response_negative_case_required_fields = {
     "detail": [
@@ -233,66 +227,65 @@ response_negative_case_max_length_and_data_type = {
     ]
 }
 
+def get_data_tender_committee_request(request_no, db):
+    data_request = get_tender_committee_request_by_request_no(request_no, db).__dict__
+    data_request['recommendation'] = get_tender_committee_recommendation_by_request_no(request_no, db)
 
-def expected_data_tender_committee_request(request_no):
-    tcr_object = parse_obj_as(TenderCommitteeRequest,
-                              get_tender_committee_request_by_request_no(request_no=request_no, db=db))
-    tcrm_object = get_tender_committee_recommendation_by_request_no(request_no=request_no, db=db)
-    db.close()
-
-    tcr_dict = tcr_object.dict()
-    tcr_dict['recommendation'] = tcrm_object
-    return parse_obj_as(FormRequest, tcr_dict)
+    return schemas.FormRequest(**data_request)
 
 
-def test_fill_all_fields(client):
-    response = client.post(prefix + '/TenderCommitteeRequest/Insert', json=tender_committee_request)
-    return_success['data'] = response.json()['data']
-    request_no = response.json()['data']['request_no']
 
-    response_obj = parse_obj_as(ReturnSuccess, response.json())
-    expected_response = parse_obj_as(ReturnSuccess, return_success)
-    data_entered = parse_obj_as(FormRequest, tender_committee_request)
+def test_fill_all_fields(client, db):
+    response = client.post(prefix + '/TenderCommitteeRequest/', json=tender_committee_request)
 
+    expected_response = response_success(data=response.json()['data'])
+    expected = ReturnSuccess(**expected_response)
+
+    response_obj = ReturnSuccess(**response.json())
+    data_sent = schemas.FormRequest(**tender_committee_request)
+    data_saved = get_data_tender_committee_request(response.json()['data']['request_no'], db)
 
     assert response.status_code == 200
-    assert response_obj == expected_response
-    assert data_entered == expected_data_tender_committee_request(request_no=request_no)
+    assert response_obj == expected
+    assert data_sent == data_saved
 
+def test_optional_fields(client, db):
+    data = copy(tender_committee_request)
+    data['recommendation'][0]['directorate'] = None
+    data['recommendation'][0]['division'] = None
 
-def test_optional_fields(client):
-    tender_committee_request['recommendation'][0]['directorate'] = None
-    tender_committee_request['recommendation'][0]['division'] = None
+    response = client.post(prefix + '/TenderCommitteeRequest/', json=data)
 
-    response = client.post(prefix + '/TenderCommitteeRequest/Insert', json=tender_committee_request)
-    return_success['data'] = response.json()['data']
-    request_no = response.json()['data']['request_no']
+    expected_response = response_success(data=response.json()['data'])
+    expected = ReturnSuccess(**expected_response)
 
-    response_obj = parse_obj_as(ReturnSuccess, response.json())
-    data_entered = parse_obj_as(FormRequest, tender_committee_request)
-    expected_response = parse_obj_as(ReturnSuccess, return_success)
+    response_obj = ReturnSuccess(**response.json())
+    data_sent = schemas.FormRequest(**data)
+    data_saved = get_data_tender_committee_request(response.json()['data']['request_no'], db)
 
     assert response.status_code == 200
-    assert response_obj == expected_response
-    assert data_entered == expected_data_tender_committee_request(request_no=request_no)
+    assert response_obj == expected
+    assert data_sent == data_saved
 
 
 def test_must_have_at_least_one_recommendation(client):
-    tender_committee_request['recommendation'] = None
+    data = copy(tender_committee_request)
+    data['recommendation'] = None
 
-    response = client.post(prefix + '/TenderCommitteeRequest/Insert', json=tender_committee_request)
+    response = client.post(prefix + '/TenderCommitteeRequest/', json=data)
 
     assert response.status_code == 422
     assert response.json() == response_negative_case_must_have_at_least_1_recommendation
 
 
 def test_max_length_and_data_type(client):
-    tender_committee_request['agns_number'] = random_alphanumeric(size=21)
-    tender_committee_request['memo_to'] = random_alphanumeric(size=13)
-    tender_committee_request['subject'] = random_alphanumeric(size=101)
-    tender_committee_request['effective_start_date'] = 'qwerty'
-    tender_committee_request['effective_end_date'] = 'qwerty'
-    tender_committee_request['recommendation'] = [{
+    data = copy(tender_committee_request)
+    data['agns_number'] = random_alphanumeric(size=21)
+    data['memo_to'] = random_alphanumeric(size=13)
+    data['subject'] = random_alphanumeric(size=101)
+    data['effective_start_date'] = 'qwerty'
+    data['effective_end_date'] = 'qwerty'
+    data['recommendation'] = [{
         'account_name': random_alphanumeric(size=13),
         'name': random_alphanumeric(size=51),
         'email': random_alphanumeric(size=51),
@@ -300,15 +293,15 @@ def test_max_length_and_data_type(client):
         'division': random_alphanumeric(size=11),
     }]
 
-    response = client.post(prefix + '/TenderCommitteeRequest/Insert', json=tender_committee_request)
+    response = client.post(prefix + '/TenderCommitteeRequest/', json=data)
 
     assert response.status_code == 422
     assert response.json() == response_negative_case_max_length_and_data_type
 
 
 def test_required_fields(client):
-    clear_all_fields_in_dict(tender_committee_request)
-    tender_committee_request['recommendation'] = [{
+    data_tcr = clear_all_fields_in_dict(data=copy(tender_committee_request))
+    data_tcr['recommendation'] = [{
         'account_name': None,
         'name': None,
         'email': None,
@@ -316,7 +309,7 @@ def test_required_fields(client):
         'division': None
     }]
 
-    response = client.post(prefix + '/TenderCommitteeRequest/Insert', json=tender_committee_request)
+    response = client.post(prefix + '/TenderCommitteeRequest/', json=data_tcr)
 
     assert response.status_code == 422
     assert response.json() == response_negative_case_required_fields

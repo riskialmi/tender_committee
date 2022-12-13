@@ -1,18 +1,14 @@
+from typing import List
 from pydantic import parse_obj_as
 import datetime
 
-from app.system.config import EMAIL_ADMIN
+from app.auth.oauth2 import fake_auth_user
 from app.api.schemas import tender_committee as schemas
-from app.api.crud import tender_committee as tc_crud, user_management as um_crud
-
+from app.api.crud import tender_committee as tc_crud
+from app.db.models import tender_committee as models
 
 now = datetime.datetime.today()
 
-return_success = {
-  "is_success": True,
-  "data": {},
-  "message": None
-}
 
 tender_committee = \
     [
@@ -156,21 +152,17 @@ tender_committee_request = {
 }
 
 
-def populate_tender_committee(data):
-    tender_committee_obj = parse_obj_as(schemas.TenderCommittee, data)
-    return tc_crud.create_tender_committee(tender_committee_obj)
+def populate_tender_committee(db):
+    tender_committee_obj = parse_obj_as(List[schemas.TenderCommittee], tender_committee)
+    for data in tender_committee_obj:
+        db.add(tc_crud.create_tender_committee(data))
 
-def populate_tender_committee_request(data, db):
-    user = um_crud.get_user_by_email(email=EMAIL_ADMIN[0], db=db)
-    current_user = {
-        'user': user.account_name,
-        'on_behalf_of': user.account_name
-    }
-    tender_committee_request_obj = parse_obj_as(schemas.FormRequest, data)
-    return tc_crud.create_tender_committee_request(param=tender_committee_request_obj, current_user=current_user, db=db)
+    db.commit()
+    return tender_committee_obj
 
-def populate_data_module_tender_committee(db):
-    populate_tender_committee_request(tender_committee_request, db)
-    for i in tender_committee:
-        db.add(populate_tender_committee(i))
+def populate_tender_committee_request(db):
+    tender_committee_request_obj = schemas.FormRequest(**tender_committee_request)
+    return tc_crud.create_tender_committee_request(param=tender_committee_request_obj, current_user=fake_auth_user(), db=db)
 
+def get_tender_committee_request(db):
+    return db.query(models.TenderCommitteeRequest).one()

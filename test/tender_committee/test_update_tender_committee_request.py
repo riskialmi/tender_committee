@@ -1,17 +1,12 @@
 import datetime
-from pydantic import parse_obj_as
 
 from app.api.crud.utils import random_alphanumeric
-from test.tender_committee.tender_committee_attr_value import return_success, tender_committee_request
-from app.api.schemas.tender_committee import FormRequest
-from app.api.schemas.utils import ReturnSuccess
-from app.db.database import SessionLocal
-from test.tender_committee.test_get_tender_committee_request import \
-    expected_data_tender_committee_request as populated_data
-from test.tender_committee.test_insert_tender_committee_request import expected_data_tender_committee_request
+from test.tender_committee.tender_committee_attr_value import  tender_committee_request
+from app.api.schemas import tender_committee as schemas
+from app.api.router.tender_committee import response_success
+from test.tender_committee.test_create_tender_committee_request import get_data_tender_committee_request
 
 prefix = '/TenderCommittee'
-db = SessionLocal()
 now = datetime.datetime.now()
 
 tender_committee_request_updated = {
@@ -163,22 +158,20 @@ response_negative_case_max_length_and_data_type = {
 
 
 
-def test_update_all_fields(client):
-    tender_committee_request_obj = populated_data(tender_committee_request['agns_number'])
-    response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + tender_committee_request_obj.request_no,
-                           json=tender_committee_request_updated)
-    return_success['data'] = response.json()['data']
+def test_update_all_fields(client, db, populate_data_tender_committee_request):
+    response = client.patch(prefix + '/TenderCommitteeRequest/' + populate_data_tender_committee_request.request_no,
+                            json=tender_committee_request_updated)
 
-    response_obj = parse_obj_as(ReturnSuccess, response.json())
-    data_entered = parse_obj_as(FormRequest, tender_committee_request_updated)
-    expected_response = parse_obj_as(ReturnSuccess, return_success)
+    data_sent = schemas.FormRequest(**tender_committee_request_updated)
+    data_saved = get_data_tender_committee_request(populate_data_tender_committee_request.request_no, db)
+    expected = response_success(data={'request_no': populate_data_tender_committee_request.request_no})
 
     assert response.status_code == 200
-    assert response_obj == expected_response
-    assert data_entered == expected_data_tender_committee_request(request_no=response.json()['data']['request_no'])
+    assert response.json() == expected
+    assert data_sent == data_saved
 
 
-def test_partial_update(client):
+def test_partial_update(client, db, populate_data_tender_committee_request):
     partial_update = {
         "memo_to": "account_test",
         "subject": "subject",
@@ -186,50 +179,48 @@ def test_partial_update(client):
         "effective_end_date": (now + datetime.timedelta(days=1)).isoformat(),
         "letter": "letter",
     }
-    tender_committee_request_updated.update(partial_update)
 
-    tender_committee_request_obj = populated_data(tender_committee_request_updated['agns_number'])
-    response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + tender_committee_request_obj.request_no,
+    response = client.patch(prefix + '/TenderCommitteeRequest/' + populate_data_tender_committee_request.request_no,
                             json=partial_update)
-    return_success['data'] = response.json()['data']
 
-    response_obj = parse_obj_as(ReturnSuccess, response.json())
-    data_entered = parse_obj_as(FormRequest, tender_committee_request_updated)
-    expected_response = parse_obj_as(ReturnSuccess, return_success)
+    tender_committee_request.update(partial_update)
+    data_sent = schemas.FormRequest(**tender_committee_request)
+    data_saved = get_data_tender_committee_request(populate_data_tender_committee_request.request_no, db)
+    expected = response_success(data={'request_no': populate_data_tender_committee_request.request_no})
+
 
     assert response.status_code == 200
-    assert response_obj == expected_response
-    assert data_entered == expected_data_tender_committee_request(request_no=response.json()['data']['request_no'])
+    assert response.json() == expected
+    assert  data_sent == data_saved
 
-
-def test_update_with_wrong_request_no(client):
-    request_no = 'TC-000001'
-    response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + request_no,
-                            json=tender_committee_request_updated)
-
-    expected_response = {'detail': f"request number {request_no} doesn't exist"}
-
-    assert response.status_code == 404
-    assert response.json() == expected_response
-
-def test_max_length_and_data_type(client):
-    tender_committee_request['agns_number'] = random_alphanumeric(size=21)
-    tender_committee_request['memo_to'] = random_alphanumeric(size=13)
-    tender_committee_request['subject'] = random_alphanumeric(size=101)
-    tender_committee_request['effective_start_date'] = 'qwerty'
-    tender_committee_request['effective_end_date'] = 'qwerty'
-    tender_committee_request['recommendation'] = [{
-        "id": 1,
-        'account_name': random_alphanumeric(size=13),
-        'name': random_alphanumeric(size=51),
-        'email': random_alphanumeric(size=51),
-        'directorate': random_alphanumeric(size=6),
-        'division': random_alphanumeric(size=11),
-    }]
-
-    tender_committee_request_obj = populated_data(tender_committee_request_updated['agns_number'])
-    response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + tender_committee_request_obj.request_no,
-                            json=tender_committee_request)
-
-    assert response.status_code == 422
-    assert response.json() == response_negative_case_max_length_and_data_type
+# def test_update_with_wrong_request_no(client):
+#     request_no = 'TC-000001'
+#     response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + request_no,
+#                             json=tender_committee_request_updated)
+#
+#     expected_response = {'detail': f"request number {request_no} doesn't exist"}
+#
+#     assert response.status_code == 404
+#     assert response.json() == expected_response
+#
+# def test_max_length_and_data_type(client):
+#     tender_committee_request['agns_number'] = random_alphanumeric(size=21)
+#     tender_committee_request['memo_to'] = random_alphanumeric(size=13)
+#     tender_committee_request['subject'] = random_alphanumeric(size=101)
+#     tender_committee_request['effective_start_date'] = 'qwerty'
+#     tender_committee_request['effective_end_date'] = 'qwerty'
+#     tender_committee_request['recommendation'] = [{
+#         "id": 1,
+#         'account_name': random_alphanumeric(size=13),
+#         'name': random_alphanumeric(size=51),
+#         'email': random_alphanumeric(size=51),
+#         'directorate': random_alphanumeric(size=6),
+#         'division': random_alphanumeric(size=11),
+#     }]
+#
+#     tender_committee_request_obj = populated_data(tender_committee_request_updated['agns_number'])
+#     response = client.patch(prefix + '/TenderCommitteeRequest/Update/' + tender_committee_request_obj.request_no,
+#                             json=tender_committee_request)
+#
+#     assert response.status_code == 422
+#     assert response.json() == response_negative_case_max_length_and_data_type
